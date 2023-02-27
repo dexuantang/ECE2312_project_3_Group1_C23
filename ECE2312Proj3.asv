@@ -1,27 +1,58 @@
 clear;
+close all;
 %% Global variable declaration
 FS = 44100;
+FS_target = 16000;
 nBits = 8;
 nChannels = 1;
 record_length = 7;                                                               %end
 %% filter parameters, F is a vector of normalized frequencies
-F = [0 0.272 0.363 1];
-A = [1 1 0 0];
+FLP0P = 6000;
+FLP0S = 8000;
+FLP0 = [0 (2*FLPOP)/FS (2*FLPOS)/FS 1]; % 6000Hz pass band end and 8000Hz stop band start F_pass = F_pass_target/FS, F_stop = F_stop_target/FS
+ALP0 = [1 1 0 0];
 
 %% Select audio devices
 [user_selected_input_ID, user_slected_output_ID] = get_user_selected_device();
 
 
-%% 5 load fox
+%% load audio
 [audio_data_loaded_1,FS_loaded] = load_audio_from_wav();
-plot_spectrogram(audio_data_loaded_1, FS_loaded, 15, "Spectrogram of LPF output audio");
+figure;
+plot_spectrogram(audio_data_loaded_1, FS_loaded, 15, "Spectrogram of original audio");
 
-%% 7 pass the above audio through a LPF
-filtered_audio = LPF(F, A, audio_data_loaded_1);
+%% 3 pass the above audio through a LPF and downsampler
+filtered_audio = my_filter(FLP0, ALP0, audio_data_loaded_1);
+figure;
 plot_spectrogram(filtered_audio, FS_loaded, 15, "Spectrogram of LPF output audio");
 
-downsampled_audio = (F, A, filtered_audio);
-plot_spectrogram(filtered_audio, FS_loaded, 15, "Spectrogram of LPF output audio");
+downsampled_audio = my_downsample(FS_loaded, FS_target, filtered_audio);
+figure;
+plot_spectrogram(downsampled_audio, FS_target, 8, "Spectrogram of downsampled audio");
+
+%% 4 first frequency decomposition
+%% filter parameters, F is a vector of normalized frequencies
+FLP0P = 6000;
+FLP0S = 8000;
+FLP1 = [0 0.272 0.363 1]; % 2000Hz pass band end and 4000Hz stop band start note FS is now 22050Hz
+ALP1 = [1 1 0 0];
+LP1 = my_filter(FLP1, ALP1, downsampled_audio);
+FHP1 = [0 0.272 0.363 1]; % 2000Hz stop band end and 4000Hz pass band start
+AHP1 = [0 0 1 1];
+HP1 = my_filter(FHP1, AHP1, downsampled_audio);
+figure;
+subplot(2,1,1);
+plot_spectrogram(LP1, FS_target, 8, "Spectrogram of first lowpass");
+subplot(2,1,2);
+plot_spectrogram(HP1, FS_target, 8, "Spectrogram of first highpass");
+FSD1 = FS_target/2;
+DS1A = my_downsample(FS_target, FSD1, LP1);
+DS1B = my_downsample(FS_target, FSD1, HP1);
+figure;
+subplot(2,1,1);
+plot_spectrogram(DS1A, FSD1, 8, "Spectrogram of first downsampled after lowpass");
+subplot(2,1,2);
+plot_spectrogram(DS1B, FSD1, 8, "Spectrogram of first downsampled adter highpass");
 
 
 %% Functions:
@@ -39,22 +70,20 @@ function [input_device_ID, output_device_ID] = get_user_selected_device()
 end
 
 %% LPF using firls
-function filtered = LPF(F,A,audio)
-    lpf = firls(255, F, A);                                                    %255 order
-    filtered = filter(lpf, A, audio);
+function filtered = my_filter(F,A,audio)
+    f = firls(256, F, A);                                                    %256th order
+    filtered = filter(f, 1, audio);
 end
 
 %% Downsample
-function downsampled = my_downsample(FS, targer_FS, audio)
+function downsampled = my_downsample(FS, target_FS, audio)
     R = round(FS/target_FS);
     downsampled = downsample(audio, R);
-
 end
 
 
 %% A function that plots the spectrogram of a given audio data
 function plot_spectrogram(audio_data, FS, fmax, my_title)
-    figure;
     window = hamming(512);                                                     %set parameters
     N_overlap = 256;
     N_fft = 1024;
@@ -85,3 +114,5 @@ function sound_blocking(audio, FS, audio_length)
     sound(audio, FS);
     pause(audio_length)
 end
+
+
