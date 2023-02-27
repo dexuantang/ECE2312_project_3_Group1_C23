@@ -41,20 +41,15 @@ LP1 = my_filter(FLP1, ALP1, downsampled_audio);
 FHP1 = [0 (2*F1P)/FS_target (2*F1S)/FS_target 1]; % 2000Hz stop band end and 4000Hz pass band start
 AHP1 = [0 0 1 1];
 HP1 = my_filter(FHP1, AHP1, downsampled_audio);
-figure;
-subplot(2,1,1);
-plot_spectrogram(HP1, FS_target, 8, "Spectrogram of the first highpass");
-subplot(2,1,2);
-plot_spectrogram(LP1, FS_target, 8, "Spectrogram of the first lowpass");
 % downsample again
 FSD1 = FS_target/2;
 DS1A = my_downsample(FS_target, FSD1, LP1);
 DS1B = my_downsample(FS_target, FSD1, HP1);
 figure;
 subplot(2,1,1);
-plot_spectrogram(DS1B, FSD1, 4, "Spectrogram of the first downsampled after highpass");
+plot_spectrogram(DS1B, FSD1, 4, "X_H");
 subplot(2,1,2);
-plot_spectrogram(DS1A, FSD1, 4, "Spectrogram of the first downsampled after lowpass");
+plot_spectrogram(DS1A, FSD1, 4, "X_L");
 
 %% 5 second frequency decomposition
 F2P = 1800;
@@ -68,26 +63,41 @@ FHP2 = [0 (2*F2P)/FSD1 (2*F2S)/FSD1 1];
 AHP2 = [0 0 1 1];
 HP2A = my_filter(FHP2, AHP2, DS1A);
 HP2B = my_filter(FHP2, AHP2, DS1B);
+% downsample again
+FSD2 = FSD1/2;
+DSHP2B = my_downsample(FSD1, FSD2, HP2B);
+DSLP2B  = my_downsample(FSD1, FSD2, LP2B);
+DSHP2A  = my_downsample(FSD1, FSD2, HP2A);
+DSLP2A  = my_downsample(FSD1, FSD2, LP2A);
 figure;
 subplot(4,1,1);
-plot_spectrogram(HP2B, FSD1, 4, " ");
+plot_spectrogram(DSHP2B, FSD2, 2, "X_H_H");
 subplot(4,1,2);
-plot_spectrogram(LP2B, FSD1, 4, " ");
+plot_spectrogram(DSLP2B, FSD2, 2, "X_H_L");
 subplot(4,1,3);
-plot_spectrogram(HP2A, FSD1, 4, " ");
+plot_spectrogram(DSHP2A, FSD2, 2, "X_L_H");
 subplot(4,1,4);
-plot_spectrogram(LP2A, FSD1, 4, " ");
-downsample again
-FSD2 = FSD1/2;
-DSHP2B = my_downsample(FS_target, FSD1, LP1);
-DSLP2B  = my_downsample(FS_target, FSD1, HP1);
-DSHP2A  = my_downsample(FS_target, FSD1, HP1);
+plot_spectrogram(DSLP2A, FSD2, 2, "X_L_L");
 
+%% 6 reassembling the signal 
+RHP2B = upsample(DSHP2B, 2);
+RLP2B = upsample(DSLP2B, 2);
+RHP2A = upsample(DSHP2A, 2);
+RLP2A = upsample(DSLP2A, 2);
+RFS1 = 2* FSD2;
+R2B = my_filter(FHP2, AHP2, RHP2B) + my_filter(FLP2, ALP2, RLP2B);
+R2A = my_filter(FHP2, AHP2, RHP2A) + my_filter(FLP2, ALP2, RLP2A);
+% upsample again
+R1A = upsample(R2A, 2);
+R1B = upsample(R2B, 2);
+reconstructed = my_filter(FLP1, ALP1, R1A) + my_filter(FHP1, AHP1, R1B);
+RFS = 2* RFS1;
 figure;
-subplot(2,1,1);
-plot_spectrogram(DS1A, FSD1, 4, "Spectrogram of the first downsampled after lowpass");
-subplot(2,1,2);
-plot_spectrogram(DS1B, FSD1, 4, "Spectrogram of the first downsampled adter highpass");
+plot_spectrogram(reconstructed, RFS, 8, "Reassembled audio signal");
+sound_blocking(reconstructed, RFS, record_length);
+save_audio_to_wav(reconstructed, RFS);
+
+
 
 
 %% Functions:
